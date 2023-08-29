@@ -1,0 +1,54 @@
+(* functions for console output *)
+
+function putc(c);
+begin
+   asm
+      pushbpv !8 sys !1
+   end;
+end;
+
+(*
+function putn(n);
+begin
+   asm
+      pushbpv !8 sys !2
+   end;
+end;
+*)
+
+function putn(n);
+var stack.40, sp;
+begin
+   sp := 0;
+   do begin
+      stack.sp := n mod 10;
+      sp := sp + 1;
+      n := n / 10;
+   end; while n;
+   do begin
+      sp := sp - 1;
+      putc(stack.sp+'0');
+   end; while sp;
+end;
+
+function puts(s);
+var i;
+begin
+   while s.0 do begin
+      putc(s.0);
+      s := s + 1;
+   end;
+end;
+
+function puta(a, l);
+var i;
+begin
+   putc('[');
+   for i := 0 to l-2 do begin
+      putn(a:i);
+      puts(", ");
+   end;
+   if l then putn(a:(l-1));
+   putc(']');
+end;
+

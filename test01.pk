@@ -1,0 +1,32 @@
+include "put.pk";
+
+function multiples(m);
+var i;
+begin
+   (* i := 1;
+   forever begin
+      putn(i*m);
+      putc(32);
+      if i = 10 then break;
+      i := i + 1;
+   end; *)
+   i := 1;
+   do begin
+      if i = 7 then begin i := 8; continue; end;
+      putn(i*m);
+      putc(32);
+      i := i + 1;
+   end; while i <= 10;
+   (*for i := 1 to 10 do begin
+      if i = 7 then continue;
+      putn(i*m);
+      putc(32);
+      //if i = 7 then break;
+   end;*)
+   putc(10);
+end;
+
+function main;
+begin
+   multiples(7);
+end;

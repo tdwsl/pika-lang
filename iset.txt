@@ -1,0 +1,53 @@
+Pika PCode Instruction Set
+
+0 sys #h
+1 pushbpp #h
+2 popbpv #h
+3 pushbpv #h
+4 jz #h
+5 jnz #h
+6 jmp #h
+7 addsp #h
+8 push #w
+9 global #w
+A jal #w
+
+10 popra
+11 pushra
+12 poprv
+13 pushrv
+14 popbp
+15 pushbp
+16 movbpsp
+17 movspbp
+18 jra
+19 popgp
+
+20 inc
+21 dec
+22 inv
+23 neg
+24 lb
+25 lh
+26 lw
+27 --
+28 sb
+29 sh
+2A sw
+
+30 add
+31 sub
+32 add4
+33 and
+34 or
+35 xor
+36 shl
+37 shr
+38 eq
+39 ne
+3A lt
+3B lte
+3C div
+3D mul
+3E mod
+

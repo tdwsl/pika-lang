@@ -1,0 +1,54 @@
+(* hello world for pika *)
+
+include "put.pk";
+
+function pow(n, x);
+var i;
+begin
+   pow := 1;
+   for i := 1 to x do
+      pow := pow * n;
+end;
+
+function nl;
+begin
+   putc('\n');
+end;
+
+function sort(a, l);
+var i, f;
+begin
+   do begin
+      f := -1;
+      for i := 0 to l-2 do
+         if a:i > a:(i+1) then begin
+            f := a:i;
+            a:i := a:(i+1);
+            a:(i+1) := f;
+         end;
+   end;
+   while f <> -1;
+end;
+
+function tf(b);
+begin
+   if b then tf := "true";
+   else tf := "false";
+end;
+
+function main;
+var a;
+begin
+   putc('\t');
+   puts("Hello, world!\n");
+   putn(pow(2, 16)); nl;
+   puta([1, 2, 3, 4], 4); nl;
+   a := [0, 5, 2, 3, 7, 8, 1, 9, 6, 4];
+   puta(a, 10); nl;
+   sort(a, 10);
+   puta(a, 10); nl;
+   puts(tf(10)); nl;
+   puts(tf(20)); nl;
+   puts(tf(0)); nl;
+end;
+
