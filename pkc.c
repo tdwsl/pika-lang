@@ -5,15 +5,16 @@
 
 #define BUFSZ 200
 #define EXBUFSZ 1024
-#define NAMEBUFSZ 1024*512
+#define NAMEBUFSZ 1024*768
 #define MAXFUNCTIONS 400
 #define MAXARGS 30
 #define MAXVARS 50
-#define DATASZ 1024*1024
-#define MEMORYSZ 1024*1024
+#define DATASZ 1024*512
+#define MEMORYSZ 1024*512
 #define MAXLISTS 250
 #define ORG 0x10000
 #define CSTACKSZ 128
+#define MAXEXITS 95
 
 #define dbprintf(...) if(debug) printf(__VA_ARGS__)
 
@@ -110,6 +111,8 @@ int cstack[CSTACKSZ];
 int csp = 0;
 const char *filename = 0;
 unsigned char debug = 0;
+int exits[MAXEXITS];
+int nexits = 0;
 
 char nextc() {
     char c;
@@ -847,6 +850,10 @@ int compileNext(const char *until) {
         }
         compileUntil("END");
         if(--scope == 0) {
+            for(i = 0; i < nexits; i++)
+                *(int16_t*)&memory[exits[i]] = nmemory-exits[i]-2;
+            nexits = 0;
+
             dbprintf("movspbp\npopbp\npopra\naddsp !%d\njra\n",
               lastFunction->nargs*4);
             memory[nmemory++] = INS_MOVSPBP;
@@ -970,6 +977,11 @@ int compileNext(const char *until) {
         next(";");
         if(*buf != '"') error("expected string");
         compileFile(buf+1);
+    } else if(!strcmp(name, "EXIT")) {
+        memory[nmemory++] = INS_JMP;
+        exits[nexits++] = nmemory;
+        nmemory += 2;
+        next(";");
     } else {
         getNext(buf);
         if(!strcmp(buf, ":=")) {

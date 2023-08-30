@@ -29,4 +29,6 @@ end;
 function main;
 begin
    multiples(7);
+   exit;
+   puts("hi\n");
 end;
