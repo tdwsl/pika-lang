@@ -588,21 +588,54 @@ int doOp(int a, int b, int o, int *sp) {
     case INS_LTE: return a<=b;
     case INS_LTE|INS_INV<<8: return a>b;
     case INS_LT|INS_INV<<8: return a>=b;
+    case INS_ADD4|INS_LW<<8: return *(uint32_t*)&memory[a+b<<2];
+    case INS_ADD|INS_LB<<8: return memory[a+b];
     default:
         error("invalid operation");
     }
+}
+
+void delRpn(char **rp, int *rpn, int n) {
+    int i;
+    (*rpn) -= n;
+    for(i = 0; i < *rpn; i++)
+        rp[i] = rp[i+n];
 }
 
 int expression(const char *end, const char *end1) {
     char buf[EXBUFSZ];
     char *p;
     char *rp[100];
-    int nrp, r, i, j;
+    int nrp, r, i, j, n;
     nrp = 0;
     struct function *f;
 
     p = buf;
     r = _expression(end, end1, rp, &nrp, &p);
+
+    for(;;) {
+        if(nrp < 2) break;
+        if(!_literal(rp[0], &i)) break;
+        if(!strcmp(rp[1], "NOT")) {
+            delRpn(rp, &nrp, 1);
+            rp[0] = p;
+            sprintf(p, "%u", ~i);
+            p += strlen(p)+1;
+        } else if(!strcmp(rp[1], "NEG")) {
+            delRpn(rp, &nrp, 1);
+            rp[0] = p;
+            sprintf(p, "%u", i*-1);
+            p += strlen(p)+1;
+        } else {
+            if(nrp < 3) break;
+            if(!_literal(rp[1], &n)) break;
+            if((j = strindex(ops, rp[2])) == -1) break;
+            delRpn(rp, &nrp, 2);
+            rp[0] = p;
+            sprintf(p, "%u", doOp(i, n, opOps[j], &nrp));
+            p += strlen(p)+1;
+        }
+    }
 
     for(i = 0; i < nrp; i++) {
         j = strindex(ops, rp[i]);
