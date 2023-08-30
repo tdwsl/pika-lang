@@ -1,0 +1,63 @@
+(* file handling functions *)
+
+function fopen(filename, mode);
+begin
+   asm
+      pushbpv !12 pushbpv !8
+      sys !8 poprv
+   end;
+end;
+
+function fclose(fp);
+begin
+   asm
+      pushbpv !8 sys !9
+   end;
+end;
+
+function fgetc(fp);
+begin
+   asm
+      pushbpv !12 pushbpv !8
+      sys !10 poprv
+   end;
+end;
+
+function fputc(c, fp);
+begin
+   asm
+      pushbpv !12 pushbpv !8
+      sys !11
+   end;
+end;
+
+function fseek(fp, offs);
+begin
+   asm
+      pushbpv !12 pushbpv !8
+      sys !12
+   end;
+end;
+
+function feof(fp);
+begin
+   feof := fgetc(fp) = -1;
+   fseek(fp, -1);
+end;
+
+function fread(buf, sz, n, fp);
+var i, i2;
+begin
+   i2 := n*sz;//-sz;
+   i := 0;
+   while (i < i2) and (not feof(fp)) do begin
+      buf.i := fgetc(fp);
+      i := i + 1;
+   end;
+   {for i2 := 0 to sz-1 do begin
+      buf.i := 0;
+      i := i + 1;
+   end;}
+   fread := i-sz;
+end;
+

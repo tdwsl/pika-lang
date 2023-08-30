@@ -26,7 +26,7 @@ begin
    putc(10);
 end;
 
-function main;
+function main(argc, args);
 begin
    multiples(7);
    exit;

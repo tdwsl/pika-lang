@@ -1,0 +1,15 @@
+(* print args *)
+
+include "put.pk";
+
+function main(argc, args);
+var i;
+begin
+   puts("argc: ");
+   putn(argc);
+   putc('\n');
+   for i := 0 to argc-1 do begin
+      puts(args:i);
+      putc('\n');
+   end;
+end;

@@ -1,0 +1,17 @@
+(* cat a file *)
+
+include "put.pk";
+include "file.pk";
+
+function main(argc, args);
+var fp, buf.16*1024;
+begin
+   if argc <> 2 then begin
+      puts("wrong no. of args\n");
+      //exit;
+      halt;
+   end;
+   fp := fopen(args:1, "r");
+   while fread(buf, 1, 16*1024, fp) do puts(buf);
+   fclose(fp);
+end;

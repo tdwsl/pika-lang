@@ -7,18 +7,13 @@ begin
    end;
 end;
 
-(*
-function putn(n);
-begin
-   asm
-      pushbpv !8 sys !2
-   end;
-end;
-*)
-
 function putn(n);
 var stack.40, sp;
 begin
+   if n < 0 then begin
+      putc('-');
+      n := -n;
+   end;
    sp := 0;
    do begin
       stack.sp := n mod 10;

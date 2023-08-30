@@ -325,9 +325,13 @@ void toRpn(char **ex, int nex, char **rp, int *nrp, char ***bp, int nbp) {
                 rp[i+j] = bp[bpi][j];
             bpi++;
             *nrp += l-1;
-            i += l;
+            i += l-1;
         }
     }
+
+    /*for(i = 0; i < *nrp; i++)
+        printf("[%s]", rp[i]);
+    printf("\n");*/
 }
 
 struct function *findFunction(char *s) {
@@ -982,6 +986,11 @@ int compileNext(const char *until) {
         exits[nexits++] = nmemory;
         nmemory += 2;
         next(";");
+    } else if(!strcmp(name, "HALT")) {
+        memory[nmemory++] = INS_SYS;
+        *(int16_t*)&memory[nmemory] = 0;
+        nmemory += 2;
+        next(";");
     } else {
         getNext(buf);
         if(!strcmp(buf, ":=")) {
@@ -1087,7 +1096,9 @@ void saveFile(const char *filename) {
 
 void initMain() {
     functions[nfunctions].s = "MAIN";
-    functions[nfunctions].nargs = 0;
+    functions[nfunctions].nargs = 2;
+    functions[nfunctions].args[0] = "ARGC";
+    functions[nfunctions].args[1] = "ARGS";
     functions[nfunctions].nvars = 0;
     functions[nfunctions].addr = 0;
     nfunctions++;

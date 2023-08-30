@@ -36,7 +36,7 @@ begin
    else tf := "false";
 end;
 
-function main;
+function main(argc, args);
 var a;
 begin
    putc('\t');

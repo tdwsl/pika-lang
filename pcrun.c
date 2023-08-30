@@ -4,10 +4,15 @@
 #include <string.h>
 
 #define MEMORY_SIZE 1024*1024*2
+#define MAXFILES 32
 
 uint32_t pc, ra, rv, sp, bp, gp;
+uint32_t gend;
 
 unsigned char memory[MEMORY_SIZE];
+
+FILE *files[MAXFILES];
+int filei = 0;
 
 unsigned char debug = 0;
 
@@ -79,6 +84,7 @@ void run() {
     unsigned char ins;
     int32_t h, a;
     uint32_t w;
+    char buf[20];
 
     for(;;) {
         if(debug) { printStack(); printIns(); }
@@ -101,6 +107,40 @@ void run() {
             case 2:
                 printf("%d", *(int32_t*)&memory[sp]);
                 sp += 4;
+                break;
+            case 4:
+                sp -= 4;
+                *(int32_t*)&memory[sp] = fgetc(stdin);
+                break;
+            case 8:
+                strcpy(buf, (char*)&memory[*(uint32_t*)&memory[sp]]);
+                if(buf[strlen(buf)-1] != 'b') strcat(buf, "b");
+                files[filei] = fopen(
+                  (char*)&memory[*(uint32_t*)&memory[sp+4]],
+                  (char*)&memory[*(uint32_t*)&memory[sp]]);
+                sp += 4;
+                if(files[filei]) {
+                    *(uint32_t*)&memory[sp] = (++filei)%MAXFILES;
+                    filei %= MAXFILES;
+                } else *(uint32_t*)&memory[sp] = 0;
+                break;
+            case 9:
+                fclose(files[*(uint32_t*)&memory[sp]-1]);
+                sp += 4;
+                break;
+            case 10:
+                *(uint32_t*)&memory[sp] =
+                  fgetc(files[*(uint32_t*)&memory[sp]-1]);
+                break;
+            case 11:
+                fputc(*(uint32_t*)&memory[sp+4],
+                  files[*(uint32_t*)&memory[sp]-1]);
+                sp += 8;
+                break;
+            case 12:
+                fseek(files[*(uint32_t*)&memory[sp+4]-1],
+                  *(int32_t*)&memory[sp], SEEK_CUR);
+                sp += 8;
                 break;
             }
             break;
@@ -189,10 +229,10 @@ void run() {
             (*(int32_t*)&memory[sp])--;
             break;
         case INS_INV:
-            *(int32_t*)&memory[sp] = ~*(int32_t*)&memory[sp];
+            *(int32_t*)&memory[sp] = ~(*(int32_t*)&memory[sp]);
             break;
         case INS_NEG:
-            *(int32_t*)&memory[sp] = (~*(int32_t*)&memory[sp])+1;
+            *(int32_t*)&memory[sp] = (~(*(int32_t*)&memory[sp]))+1;
             break;
         case INS_LB:
             *(int32_t*)&memory[sp] = (char)memory[*(int32_t*)&memory[sp]];
@@ -254,7 +294,7 @@ void run() {
             break;
         case INS_EQ:
             *(int32_t*)&memory[sp+4] =
-              *(int32_t*)&memory[sp+4] == *(int32_t*)&memory[sp];
+              (*(int32_t*)&memory[sp+4] == *(int32_t*)&memory[sp])*-1;
             sp += 4;
             break;
         case INS_NE:
@@ -301,7 +341,23 @@ void loadFile(const char *filename) {
     fread(&gp, 4, 1, fp);
     fread(&memory[pc], 1, gp, fp);
     gp += pc;
-    fread(&memory[gp], 1, MEMORY_SIZE-gp, fp);
+    gend = gp+fread(&memory[gp], 1, MEMORY_SIZE-gp, fp);
+}
+
+void addArgs(int argc, char **args) {
+    uint32_t i, j;
+
+    sp -= 4;
+    *(uint32_t*)&memory[sp] = argc;
+    sp -= 4;
+    *(uint32_t*)&memory[sp] = gend;
+
+    j = gend+argc*4;
+    for(i = 0; i < argc; i++) {
+        *(uint32_t*)&memory[gend+i*4] = j;
+        strcpy(memory+j, args[i]);
+        j += strlen(args[i])+1;
+    }
 }
 
 int main(int argc, char **args) {
@@ -309,11 +365,12 @@ int main(int argc, char **args) {
         debug = 1;
         argc--;
     }
-    if(argc != 2) {
+    if(argc < 2) {
         printf("usage: %s <file>\n", args[0]);
         return 0;
     }
     loadFile(args[1]);
+    addArgs(argc-1, args+1);
     run();
     return 0;
 }
