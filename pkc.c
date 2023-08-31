@@ -9,12 +9,14 @@
 #define MAXFUNCTIONS 400
 #define MAXARGS 30
 #define MAXVARS 50
+#define MAXGLOBALS 300
 #define DATASZ 1024*512
 #define MEMORYSZ 1024*512
 #define MAXLISTS 250
 #define ORG 0x10000
 #define CSTACKSZ 128
 #define MAXEXITS 95
+#define MAXCONSTANTS 300
 
 #define dbprintf(...) if(debug) printf(__VA_ARGS__)
 
@@ -89,7 +91,7 @@ const int opOps[] = {
     INS_EQ, INS_NE, INS_LT, INS_LTE, INS_LTE|INS_INV<<8, INS_LT|INS_INV<<8, 0,
 };
 
-const char *delim = ",.:;()[]{}+-*/<>=@\"'";
+const char *delim = ",.:;()[]{}+-*/<>=\"'";
 const char *delinkable = "+-*/.:<>";
 
 FILE *fp;
@@ -113,6 +115,13 @@ const char *filename = 0;
 unsigned char debug = 0;
 int exits[MAXEXITS];
 int nexits = 0;
+char *globals[MAXGLOBALS];
+int globaln[MAXGLOBALS];
+int globalp[MAXGLOBALS];
+int nglobals = 0;
+char *constants[MAXCONSTANTS];
+int constantv[MAXCONSTANTS];
+int nconstants = 0;
 
 char nextc() {
     char c;
@@ -269,6 +278,12 @@ int strindex(const char **strs, char *s) {
     return -1;
 }
 
+int strnindex(char **strs, int i2, char *s) {
+    int i;
+    for(i = 0; i < i2; i++) if(!strcmp(strs[i], s)) return i;
+    return -1;
+}
+
 void pushRpn(char **ex, int nex, char **rp, int *nrp, int i) {
     if(i < 0 || i >= nex || !ex[i]) return;
     rp[(*nrp)++] = ex[i];
@@ -418,7 +433,8 @@ int _expression(const char *end, const char *end1, char **rp, int *nrp,
                 br[nbr++] = 0;
             }
             f = 0;
-        } else if((f = findFunction(ex[nex-1])) == lastFunction)
+        } else if(lastFunction &&
+          (f = findFunction(ex[nex-1])) == lastFunction)
             ex[nex-1] = "**";
         else if(!strcmp(ex[nex-1], "[")) {
             lists[nlists++] = ndata;
@@ -468,10 +484,26 @@ int number(char *s, int *n) {
     return 1;
 }
 
+int _literal(char *s, int *n) {
+    int i;
+    if(number(s, n)) return 1;
+    for(i = 0; i < nconstants; i++)
+        if(!strcmp(constants[i], s)) {
+            *n = constantv[i];
+            return 1;
+        }
+    return 0;
+}
+
 void push(char *s) {
     int i;
+    char ptr;
     struct function *f;
-    if(number(s, &i)) {
+
+    if(*s == '@') { ptr = 1; s++; }
+    else ptr = 0;
+
+    if(!ptr && _literal(s, &i)) {
         dbprintf("push #%d\n", i);
         memory[nmemory++] = INS_PUSH;
         *(uint32_t*)&memory[nmemory] = i;
@@ -485,7 +517,7 @@ void push(char *s) {
         memory[nmemory++] = INS_PUSH;
         *(uint32_t*)&memory[nmemory] = s[1];
         nmemory += 4;
-    } else if(f = findFunction(s)) {
+    } else if(!ptr && (f = findFunction(s))) { // later
         dbprintf("jal #%s\n", f->s);
         memory[nmemory++] = INS_JAL;
         *(uint32_t*)&memory[nmemory] = f-functions;
@@ -507,7 +539,7 @@ void push(char *s) {
         for(i = 0; i < f->nargs; i++)
             if(!strcmp(f->args[i], s)) {
                 dbprintf("pushbpv !%d\n", (f->nargs+1-i)*4);
-                memory[nmemory++] = INS_PUSHBPV;
+                memory[nmemory++] = (ptr) ? INS_PUSHBPP : INS_PUSHBPV;
                 *(int16_t*)&memory[nmemory] = (f->nargs+1-i)*4;
                 nmemory += 2;
                 return;
@@ -515,18 +547,34 @@ void push(char *s) {
         for(i = 0; i < f->nvars; i++)
             if(!strcmp(f->vars[i], s)) {
                 if(f->varn[i]) {
+                    if(ptr) { s--; break; }
                     dbprintf("pushbpp !%d\n", f->varp[i]);
                     memory[nmemory++] = INS_PUSHBPP;
                     *(int16_t*)&memory[nmemory] = f->varp[i]+4-f->varn[i];
                     nmemory += 2;
                 } else {
                     dbprintf("pushbpv !%d\n", f->varp[i]);
-                    memory[nmemory++] = INS_PUSHBPV;
+                    memory[nmemory++] = (ptr) ? INS_PUSHBPP : INS_PUSHBPV;
                     *(int16_t*)&memory[nmemory] = f->varp[i];
                     nmemory += 2;
                 }
                 return;
             }
+
+        for(i = 0; i < nglobals; i++)
+            if(!strcmp(globals[i], s)) {
+                if(globaln[i] && ptr) { s--; break; }
+                dbprintf("global #%d\n", globalp[i]);
+                memory[nmemory++] = INS_GLOBAL;
+                *(uint32_t*)&memory[nmemory] = globalp[i];
+                nmemory += 4;
+                if(!globaln[i] && !ptr) {
+                    dbprintf("lw\n");
+                    memory[nmemory++] = INS_LW;
+                }
+                return;
+            }
+
         errstart();
         printf("unknown value %s\n", s);
         exit(1);
@@ -560,20 +608,31 @@ void pop(char *s) {
             nmemory += 2;
             return;
         }
+
+        for(i = 0; i < nglobals; i++)
+            if(!strcmp(globals[i], s)) {
+                dbprintf("popra\nglobal #%d\n", globalp[i]);
+                memory[nmemory++] = INS_POPRA;
+                memory[nmemory++] = INS_GLOBAL;
+                *(uint32_t*)&memory[nmemory] = globalp[i];
+                nmemory += 4;
+                dbprintf("pushra\nsw\n");
+                memory[nmemory++] = INS_PUSHRA;
+                memory[nmemory++] = INS_SW;
+                return;
+            }
+
     errstart();
     dbprintf("unknown value %s\n", s);
     exit(1);
 }
 
-int _literal(char *s, int *n) {
-    if(number(s, n)) return 1;
-    return 0;
-}
-
 int literal(char *s) {
     int n;
-    if(!_literal(s, &n))
+    if(!_literal(s, &n)) {
+        printf("%s\n", s);
         error("failed to evaluate literal");
+    }
     return n;
 }
 
@@ -818,29 +877,61 @@ int compileNext(const char *until) {
             lastFunction = &functions[nfunctions++];
             dbprintf(":f%s\n", name);
         }
-    } else if(!strcmp(name, "VAR")) {
-        f = lastFunction;
-        f->nvars = 0;
-        a1 = -4;
+    } else if(!strcmp(name, "CONST")) {
         for(;;) {
             getNext(buf);
-            f->varp[f->nvars] = a1;
-            f->varn[f->nvars] = 0;
-            a1 -= 4;
-            f->vars[f->nvars++] = addName(buf);
+            constants[nconstants] = addName(buf);
+            next(":=");
+            n = value(",", ";", &constantv[nconstants]);
+            nconstants++;
+            if(n) break;
+        }
+    } else if(!strcmp(name, "VAR")) {
+        if(lastFunction == 0) {
+            for(;;) {
+                getNext(buf);
+                globalp[nglobals] = ndata;
+                globaln[nglobals] = 0;
+                ndata += 4;
+                globals[nglobals++] = addName(buf);
 
-            getNext(buf);
-            if(!strcmp(buf, ";")) break;
-            if(!strcmp(buf, ".")) {
-                n = value(",", ";", &f->varn[f->nvars-1]);
-                a1 -= f->varn[f->nvars-1]-4;
-                if(n) break;
-            } else if(!strcmp(buf, ":")) {
-                n = value(",", ";", &f->varn[f->nvars-1]);
-                f->varn[f->nvars-1] * 4;
-                a1 -= f->varn[f->nvars-1]-4;
-                if(n) break;
-            } else expect(buf, ",");
+                getNext(buf);
+                if(!strcmp(buf, ";")) break;
+                if(!strcmp(buf, ".")) {
+                    n = value(",", ";", &globaln[nglobals-1]);
+                    ndata += globaln[nglobals-1]-4;
+                    if(n) break;
+                } else if(!strcmp(buf, ":")) {
+                    n = value(",", ";", &globaln[nglobals-1]);
+                    globaln[nglobals-1] <<= 2;
+                    ndata += globaln[nglobals-1]-4;
+                    if(n) break;
+                } else expect(buf, ",");
+            }
+        } else {
+            f = lastFunction;
+            f->nvars = 0;
+            a1 = -4;
+            for(;;) {
+                getNext(buf);
+                f->varp[f->nvars] = a1;
+                f->varn[f->nvars] = 0;
+                a1 -= 4;
+                f->vars[f->nvars++] = addName(buf);
+
+                getNext(buf);
+                if(!strcmp(buf, ";")) break;
+                if(!strcmp(buf, ".")) {
+                    n = value(",", ";", &f->varn[f->nvars-1]);
+                    a1 -= f->varn[f->nvars-1]-4;
+                    if(n) break;
+                } else if(!strcmp(buf, ":")) {
+                    n = value(",", ";", &f->varn[f->nvars-1]);
+                    f->varn[f->nvars-1] <<= 2;
+                    a1 -= f->varn[f->nvars-1]-4;
+                    if(n) break;
+                } else expect(buf, ",");
+            }
         }
     } else if(!strcmp(name, "BEGIN")) {
         if(scope++ == 0) {
@@ -867,6 +958,8 @@ int compileNext(const char *until) {
             *(int16_t*)&memory[nmemory] = lastFunction->nargs*4;
             nmemory += 2;
             memory[nmemory++] = INS_JRA;
+
+            lastFunction = 0;
         }
     } else if(!strcmp(name, "END")) {
         next(";");
@@ -994,8 +1087,17 @@ int compileNext(const char *until) {
     } else {
         getNext(buf);
         if(!strcmp(buf, ":=")) {
+            if((i = strnindex(globals, nglobals, name)) != -1) {
+                dbprintf("global #%d\n", globalp[i]);
+                memory[nmemory++] = INS_GLOBAL;
+                *(uint32_t*)&memory[nmemory] = globalp[i];
+                nmemory += 4;
+            }
             expression(";", 0);
-            pop(name);
+            if(i != -1) {
+                dbprintf("sw\n");
+                memory[nmemory++] = INS_SW;
+            } else pop(name);
         } else if(!strcmp(buf, ":")) {
             push(name);
             expression(":=", 0);

@@ -1,0 +1,43 @@
+(* string functions for pika *)
+
+function strcmp(s1, s2);
+var i;
+begin
+   i := -1;
+   do begin
+      i := i + 1;
+      if s1.i <> s2.i then begin strcmp := s1.i-s2.i; exit; end;
+   end; while s1.i;
+   strcmp := 0;
+end;
+
+function strchr(s, c);
+begin
+   while s.0 do begin
+      if s.0 = c then begin strchr := s; exit; end;
+      s := s + 1;
+   end;
+   strchr := 0;
+end;
+
+function strcpy(s1, s2);
+var i;
+begin
+   i := -1;
+   do begin
+      i := i + 1;
+      s1.i := s2.i;
+   end; while s2.i;
+end;
+
+function strlen(s);
+begin
+   strlen := 0;
+   while s.strlen do strlen := strlen + 1;
+end;
+
+function strcat(s1, s2);
+begin
+   strcpy(s1+strlen(s1), s2);
+end;
+
