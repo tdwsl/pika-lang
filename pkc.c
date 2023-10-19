@@ -386,7 +386,7 @@ void addList() {
 int _expression(const char *end, const char *end1, char **rp, int *nrp,
   char **buf) {
     const char *endings[] = {
-        ",", ";", ":=", ")", "]", "TO", "THEN", "DO", "ELSE", 0,
+        ",", ";", ":=", ")", "]", "TO", "THEN", "DO", "ELSE", "BY", 0,
     };
     char *ex[50];
     char *br[150];
@@ -457,7 +457,7 @@ int _expression(const char *end, const char *end1, char **rp, int *nrp,
     return r;
 }
 
-int hex(char *s, int *n) {
+int hex(char *s, int *n, char neg) {
     *n = 0;
     if(!(*s)) return 0;
     while(*s) {
@@ -467,20 +467,25 @@ int hex(char *s, int *n) {
         else return 0;
         s++;
     }
+    if(neg) *n *= -1;
     return 1;
 }
 
 int number(char *s, int *n) {
+    char neg;
     *n = 0;
+    neg = 0;
+    if(*s == '-') { s++; neg = 1; }
     if(!(*s)) return 0;
-    if(s[0] == '0' && s[1] == 'X') return hex(s+2, n);
-    if(*s == '$') return hex(s+1, n);
+    if(s[0] == '0' && s[1] == 'X') return hex(s+2, n, neg);
+    if(*s == '$') return hex(s+1, n, neg);
     while(*s) {
         *n *= 10;
         if(*s >= '0' && *s <= '9') *n += *s - '0';
         else return 0;
         s++;
     }
+    if(neg) *n *= -1;
     return 1;
 }
 
@@ -724,13 +729,15 @@ int value(const char *end, const char *end1, int *n) {
     char buf[EXBUFSZ];
     char *p;
     char *rp[100];
-    int stack[20];
+    int stack[24];
     int nrp, r, i, j, sp;
     nrp = 0;
     struct function *f;
 
     p = buf;
     r = _expression(end, end1, rp, &nrp, &p);
+
+    //for(i = 0; i < nrp; i++) printf("[%s]", rp[i]); printf("\n");
 
     sp = 0;
     for(i = 0; i < nrp; i++) {
@@ -834,6 +841,7 @@ int compileNext(const char *until) {
     char buf[BUFSZ];
     char name[BUFSZ];
     int n, r, a1, a2, i;
+    int32_t s;
     struct function *f;
 
     getNext(name);
@@ -1015,18 +1023,41 @@ int compileNext(const char *until) {
         pushLoop();
         a1 = nmemory;
         push(name);
-        expression("DO", 0);
-        dbprintf("lte\njz @l%d\n", n+1);
-        memory[nmemory++] = INS_LTE;
-        memory[nmemory++] = INS_JZ;
+        if(expression("DO", "BY")) {
+            getNext(buf);
+            if(!strcmp(buf, "-")) { getNext(buf); s = literal(buf)*-1; }
+            else s = literal(buf);
+            if(!s) error("expected non-zero value after BY");
+            next("DO");
+        } else s = 1;
+        if(s >= 0) {
+            dbprintf("lte\njz @l%d\n", n+1);
+            memory[nmemory++] = INS_LTE;
+            memory[nmemory++] = INS_JZ;
+        } else {
+            dbprintf("lt\njnz @l%d\n", n+1);
+            memory[nmemory++] = INS_LT;
+            memory[nmemory++] = INS_JNZ;
+        }
         a2 = nmemory;
         nmemory += 2;
         nlabels++;
         compileNext("");
         adjustContinues(a2, nmemory);
         push(name);
-        dbprintf("inc\n");
-        memory[nmemory++] = INS_INC;
+        if(s == 1) {
+            dbprintf("inc\n");
+            memory[nmemory++] = INS_INC;
+        } else if(s == -1) {
+            dbprintf("dec\n");
+            memory[nmemory++] = INS_DEC;
+        } else {
+            dbprintf("push #%d\nadd\n", s);
+            memory[nmemory++] = INS_PUSH;
+            *(int32_t*)&memory[nmemory] = s;
+            nmemory += 4;
+            memory[nmemory++] = INS_ADD;
+        }
         pop(name);
         dbprintf("jmp @l%d\n", n);
         memory[nmemory++] = INS_JMP;
