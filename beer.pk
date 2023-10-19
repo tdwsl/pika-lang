@@ -1,0 +1,22 @@
+(* 99 bottles of beer *)
+
+include "put.pk";
+
+function putbeer(n);
+begin
+  if n = 0 then puts("no bottles");
+  else begin if n = 1 then puts("1 bottle");
+  else begin putn(n); puts(" bottles"); end; end;
+  puts(" of beer");
+end;
+
+function main(argc, args);
+var i;
+begin
+  for i := 99 to 1 by -1 do begin
+    putbeer(i); puts(" on the wall,\n");
+    putbeer(i); puts(",\n");
+    puts("Take one down,\npass it around,\n");
+    putbeer(i-1); puts(" on the wall.\n\n");
+  end;
+end;
